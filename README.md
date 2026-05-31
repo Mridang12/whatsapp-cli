@@ -66,20 +66,22 @@ wmsg status --json
 List recent WhatsApp conversations.
 
 ```bash
-wmsg chats [--limit <count>] [--db <path>] [--json]
+wmsg chats [--limit <count>] [--include-system] [--db <path>] [--json]
 ```
 
 | Option | Description | Default |
 | --- | --- | --- |
 | `--limit <count>` | Number of chats to list. | `20` |
+| `--include-system` | Include WhatsApp status/broadcast pseudo-sessions. | off |
 
-Text output includes the chat row id, display name, WhatsApp identifier, last-message timestamp, group marker, and unread count when nonzero. JSON output includes `id`, `identifier`, `name`, `lastMessageAt`, `lastMessageText`, `unreadCount`, `isArchived`, `isRemoved`, `isGroup`, `sessionType`, and `participants`.
+By default, `chats` hides WhatsApp status/broadcast pseudo-sessions so contacts do not appear twice because of recent status updates. Text output includes the chat row id, display name, WhatsApp identifier, last-message timestamp, group marker, and unread count when nonzero. JSON output includes `id`, `identifier`, `name`, `lastMessageAt`, `lastMessageText`, `unreadCount`, `isArchived`, `isRemoved`, `isGroup`, `sessionType`, and `participants`.
 
 Examples:
 
 ```bash
 wmsg chats --limit 5
 wmsg chats --limit 5 --json
+wmsg chats --limit 5 --include-system
 ```
 
 ## `wmsg history`

@@ -18,6 +18,18 @@ func parserResolvesCommandOptionsAndFlags() throws {
 }
 
 @Test
+func parserResolvesChatsIncludeSystemFlag() throws {
+  let router = CommandRouter()
+  let (spec, values) = try router.resolve(
+    argv: ["wmsg", "chats", "--limit", "5", "--include-system"]
+  )
+
+  #expect(spec.name == "chats")
+  #expect(values.optionInt("limit") == 5)
+  #expect(values.flag("includeSystem"))
+}
+
+@Test
 func parserRejectsUnknownOptions() throws {
   let router = CommandRouter()
 
@@ -35,4 +47,3 @@ func helpIncludesWhatsAppCommands() {
   #expect(lines.contains { $0.contains("history") })
   #expect(lines.contains { $0.contains("send") })
 }
-

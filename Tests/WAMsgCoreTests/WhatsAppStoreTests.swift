@@ -15,6 +15,14 @@ func listChatsOrdersByRecentActiveSessions() throws {
 }
 
 @Test
+func listChatsCanIncludeSystemSessions() throws {
+  let store = try makeFixtureStore()
+  let chats = try store.listChats(limit: 10, includeSystemChats: true)
+
+  #expect(chats.map(\.id) == [5, 4, 2, 1])
+}
+
+@Test
 func messagesDecodeDirectionSendersAndAttachments() throws {
   let store = try makeFixtureStore()
   let messages = try store.messages(chatID: 1, limit: 10)

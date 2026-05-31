@@ -2,11 +2,14 @@ import Foundation
 import SQLite
 
 extension WhatsAppStore {
-  public func listChats(limit: Int = 20) throws -> [WhatsAppChat] {
+  public func listChats(limit: Int = 20, includeSystemChats: Bool = false) throws
+    -> [WhatsAppChat]
+  {
     let pushNameJoin =
       schema.hasPushNameTable
       ? "LEFT JOIN ZWAPROFILEPUSHNAME pn ON pn.ZJID = c.ZCONTACTJID" : ""
     let pushNameColumn = schema.hasPushNameTable ? "NULLIF(pn.ZPUSHNAME, '')" : "NULL"
+    let systemFilter = includeSystemChats ? "" : "AND NOT \(systemChatPredicate("c.ZCONTACTJID"))"
     let sql = """
       SELECT c.Z_PK AS chat_id,
              IFNULL(c.ZCONTACTJID, '') AS identifier,
@@ -21,6 +24,7 @@ extension WhatsAppStore {
       FROM ZWACHATSESSION c
       \(pushNameJoin)
       WHERE IFNULL(c.ZREMOVED, 0) = 0
+        \(systemFilter)
       ORDER BY c.ZLASTMESSAGEDATE DESC, c.Z_PK DESC
       LIMIT ?
       """
@@ -122,5 +126,14 @@ extension WhatsAppStore {
       sessionType: try intValue(row, "session_type")
     )
   }
-}
 
+  private func systemChatPredicate(_ jidExpression: String) -> String {
+    """
+    (
+      lower(IFNULL(\(jidExpression), '')) LIKE '%@status'
+      OR lower(IFNULL(\(jidExpression), '')) = 'status@broadcast'
+      OR lower(IFNULL(\(jidExpression), '')) LIKE '%@broadcast'
+    )
+    """
+  }
+}

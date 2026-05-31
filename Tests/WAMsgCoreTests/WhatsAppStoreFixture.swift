@@ -60,7 +60,9 @@ func makeFixtureStore() throws -> WhatsAppStore {
     INSERT INTO ZWACHATSESSION VALUES
       (1, '+15550001111@s.whatsapp.net', 'Ada Lovelace', 'reply', \(baseDate + 10), 2, 0, 0, 0),
       (2, '12345@g.us', 'Team Chat', 'group hello', \(baseDate + 20), 0, 0, 0, 1),
-      (3, '+15550003333@s.whatsapp.net', 'Removed', 'old', \(baseDate - 100), 0, 0, 1, 0);
+      (3, '+15550003333@s.whatsapp.net', 'Removed', 'old', \(baseDate - 100), 0, 0, 1, 0),
+      (4, '+15550001111@status', 'Mom', 'status update', \(baseDate + 30), 0, 0, 0, 0),
+      (5, 'status@broadcast', 'Status', 'broadcast status', \(baseDate + 40), 0, 0, 0, 0);
 
     INSERT INTO ZWAMESSAGE VALUES
       (1, 1, NULL, 1, 0, 'hello', \(baseDate), 'stanza-1', '+15550001111@s.whatsapp.net', '', 0, 0, 0, 'Ada'),
@@ -82,4 +84,3 @@ func makeFixtureStore() throws -> WhatsAppStore {
   )
   return try WhatsAppStore(connection: db)
 }
-

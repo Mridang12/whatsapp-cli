@@ -10,6 +10,13 @@ enum ChatsCommand {
       CommandSignature(
         options: CommandSignatures.baseOptions() + [
           .make(label: "limit", names: ["limit"], help: "number of chats to list")
+        ],
+        flags: [
+          .make(
+            label: "includeSystem",
+            names: ["include-system"],
+            help: "include WhatsApp status/broadcast pseudo-sessions"
+          )
         ]
       )
     ),
@@ -28,8 +35,9 @@ enum ChatsCommand {
   ) async throws {
     let dbPath = values.option("db") ?? WhatsAppStore.defaultPath
     let limit = values.optionInt("limit") ?? 20
+    let includeSystemChats = values.flag("includeSystem")
     let store = try storeFactory(dbPath)
-    let chats = try store.listChats(limit: limit)
+    let chats = try store.listChats(limit: limit, includeSystemChats: includeSystemChats)
 
     if runtime.jsonOutput {
       for chat in chats {
@@ -49,4 +57,3 @@ enum ChatsCommand {
     }
   }
 }
-
