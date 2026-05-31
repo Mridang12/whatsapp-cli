@@ -4,6 +4,8 @@
 
 It reads WhatsApp's local SQLite database in read-only mode and sends through WhatsApp.app using AppleScript UI automation.
 
+This tool is primarily useful for allowing AI agents like openclaw to interface with your whatsapp messages from your own account, without needing to setup API access or a business account
+
 ## Requirements
 
 - macOS with WhatsApp Desktop installed and signed in
