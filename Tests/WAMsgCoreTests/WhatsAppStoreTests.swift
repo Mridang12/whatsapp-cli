@@ -23,6 +23,16 @@ func listChatsCanIncludeSystemSessions() throws {
 }
 
 @Test
+func exactChatsResolveNamesAndPhoneNumbersWithoutSystemSessions() throws {
+  let store = try makeFixtureStore()
+
+  #expect(try store.exactChats(matching: "Ada Lovelace").map(\.id) == [1])
+  #expect(try store.exactChats(matching: "+15550001111@s.whatsapp.net").map(\.id) == [1])
+  #expect(try store.exactChats(matching: "+1 (555) 000-1111").map(\.id) == [1])
+  #expect(try store.exactChats(matching: "Mom").isEmpty)
+}
+
+@Test
 func messagesDecodeDirectionSendersAndAttachments() throws {
   let store = try makeFixtureStore()
   let messages = try store.messages(chatID: 1, limit: 10)

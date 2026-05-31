@@ -30,6 +30,18 @@ func parserResolvesChatsIncludeSystemFlag() throws {
 }
 
 @Test
+func parserResolvesSendLooseMatchFlag() throws {
+  let router = CommandRouter()
+  let (spec, values) = try router.resolve(
+    argv: ["wmsg", "send", "--to", "Mom", "--text", "hi", "--allow-loose-match"]
+  )
+
+  #expect(spec.name == "send")
+  #expect(values.option("to") == "Mom")
+  #expect(values.flag("allowLooseMatch"))
+}
+
+@Test
 func parserRejectsUnknownOptions() throws {
   let router = CommandRouter()
 

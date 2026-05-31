@@ -9,22 +9,28 @@ public typealias WhatsAppAppleScriptRunner = @Sendable (String, [String]) throws
 public struct WhatsAppSendOptions: Sendable, Equatable {
   public let recipient: String
   public let text: String
+  public let phoneNumber: String?
   public let searchDelay: TimeInterval
   public let selectOffset: Int
   public let restoreClipboard: Bool
+  public let allowLooseMatch: Bool
 
   public init(
     recipient: String,
     text: String,
+    phoneNumber: String? = nil,
     searchDelay: TimeInterval = 1.5,
     selectOffset: Int = 2,
-    restoreClipboard: Bool = true
+    restoreClipboard: Bool = true,
+    allowLooseMatch: Bool = false
   ) {
     self.recipient = recipient
     self.text = text
+    self.phoneNumber = phoneNumber
     self.searchDelay = searchDelay
     self.selectOffset = selectOffset
     self.restoreClipboard = restoreClipboard
+    self.allowLooseMatch = allowLooseMatch
   }
 }
 
@@ -43,12 +49,19 @@ public struct WhatsAppSender: Sendable {
     let recipient = options.recipient.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !recipient.isEmpty else { throw WAMsgError.invalidSendTarget }
     guard !options.text.isEmpty else { throw WAMsgError.invalidMessage }
+    if let phoneNumber = options.phoneNumber?.trimmingCharacters(in: .whitespacesAndNewlines),
+      !phoneNumber.isEmpty
+    {
+      try sendViaURL(phoneNumber: phoneNumber, text: options.text, searchDelay: options.searchDelay)
+      return
+    }
     let arguments = [
       recipient,
       options.text,
       String(options.searchDelay),
       String(max(0, options.selectOffset)),
       options.restoreClipboard ? "1" : "0",
+      options.allowLooseMatch ? "1" : "0",
     ]
     _ = try runner(Self.sendScript, arguments)
   }
@@ -70,6 +83,43 @@ public struct WhatsAppSender: Sendable {
     end run
     """
 
+  private func sendViaURL(phoneNumber: String, text: String, searchDelay: TimeInterval) throws {
+    let digits = WhatsAppStore.phoneDigits(from: phoneNumber)
+    guard !digits.isEmpty else { throw WAMsgError.invalidSendTarget }
+    var components = URLComponents()
+    components.scheme = "whatsapp"
+    components.host = "send"
+    components.queryItems = [
+      URLQueryItem(name: "phone", value: digits),
+      URLQueryItem(name: "text", value: text),
+    ]
+    guard let urlString = components.string else {
+      throw WAMsgError.appleScriptFailure("Unable to build WhatsApp send URL")
+    }
+    _ = try runner(Self.urlSendScript, [urlString, String(searchDelay)])
+  }
+
+  private static let urlSendScript = """
+    on run argv
+        set theURL to item 1 of argv
+        set openDelay to (item 2 of argv) as real
+
+        open location theURL
+        delay openDelay
+        tell application "WhatsApp" to activate
+        delay 0.5
+
+        tell application "System Events"
+            if not (exists process "WhatsApp") then error "WhatsApp process is not running"
+            tell process "WhatsApp"
+                set frontmost to true
+                key code 36
+            end tell
+        end tell
+        return "sent"
+    end run
+    """
+
   private static let sendScript = """
     on run argv
         set theRecipient to item 1 of argv
@@ -77,6 +127,7 @@ public struct WhatsAppSender: Sendable {
         set searchDelay to (item 3 of argv) as real
         set selectOffset to (item 4 of argv) as integer
         set shouldRestoreClipboard to item 5 of argv
+        set allowLooseMatch to item 6 of argv
 
         tell application "WhatsApp" to activate
         delay 1
@@ -93,11 +144,15 @@ public struct WhatsAppSender: Sendable {
                 keystroke theRecipient
                 delay searchDelay
 
-                repeat selectOffset times
-                    key code 125
-                    delay 0.15
-                end repeat
-                key code 36
+                if allowLooseMatch is "1" then
+                    repeat selectOffset times
+                        key code 125
+                        delay 0.15
+                    end repeat
+                    key code 36
+                else
+                    error "Exact WhatsApp UI match is required for name-based sends. Use a phone number, an exact local chat match, or pass --allow-loose-match."
+                end if
                 delay 0.7
 
                 set savedClipboard to missing value

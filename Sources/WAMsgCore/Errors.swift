@@ -6,6 +6,9 @@ public enum WAMsgError: Error, CustomStringConvertible, Equatable {
   case invalidISODate(String)
   case invalidSendTarget
   case invalidMessage
+  case noExactChatMatch(String)
+  case ambiguousChatMatch(String, Int)
+  case strictSendRequiresPhoneNumber(String)
   case appleScriptFailure(String)
 
   public var description: String {
@@ -21,9 +24,17 @@ public enum WAMsgError: Error, CustomStringConvertible, Equatable {
       return "Missing WhatsApp contact or chat name"
     case .invalidMessage:
       return "Missing WhatsApp message text"
+    case .noExactChatMatch(let target):
+      return
+        "No exact WhatsApp chat match for '\(target)'. Use the exact name from 'wmsg chats', a phone number, or pass --allow-loose-match."
+    case .ambiguousChatMatch(let target, let count):
+      return
+        "Ambiguous WhatsApp chat target '\(target)': \(count) exact matches. Use a phone number or a more specific chat name."
+    case .strictSendRequiresPhoneNumber(let target):
+      return
+        "Strict WhatsApp sends require a phone-number-backed direct chat for '\(target)'. Group chats and identifier-only chats require --allow-loose-match."
     case .appleScriptFailure(let message):
       return "AppleScript failed: \(message)"
     }
   }
 }
-

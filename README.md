@@ -141,20 +141,25 @@ wmsg watch --from-row-id 12345 --poll-interval 1
 Send a WhatsApp text message through WhatsApp.app UI automation.
 
 ```bash
-wmsg send --to <contact-or-group-name> --text <message> [--chat-id <rowid>] [--search-delay <seconds>] [--select-offset <count>] [--verify] [--no-restore-clipboard] [--db <path>] [--json]
+wmsg send --to <contact-or-group-name-or-phone> --text <message> [--chat-id <rowid>] [--search-delay <seconds>] [--select-offset <count>] [--verify] [--no-restore-clipboard] [--allow-loose-match] [--db <path>] [--json]
 ```
 
 | Option | Description | Default |
 | --- | --- | --- |
-| `--to <name>` | Required contact or group name as shown in WhatsApp. | none |
+| `--to <name-or-phone>` | Required contact/group name as shown in WhatsApp, or a phone number. | none |
 | `--text <message>` | Required message body. | none |
 | `--chat-id <rowid>` | Chat row id used when verifying the sent message. | none |
 | `--search-delay <seconds>` | Seconds to wait for WhatsApp search results. | `1.5` |
-| `--select-offset <count>` | Down-arrow presses before opening a search result. | `2` |
+| `--select-offset <count>` | Down-arrow presses before opening a loose search result. Only used with `--allow-loose-match`. | `2` |
 | `--verify` | After sending, look for the sent message in the database. | off |
 | `--no-restore-clipboard` | Leave the sent text on the clipboard instead of restoring the old clipboard. | off |
+| `--allow-loose-match` | Allow unsafe WhatsApp search-result selection by offset when there is no exact local match. | off |
 
-`send` uses WhatsApp search, selects a result, pastes the message through the clipboard, and presses Return. Contact selection depends on WhatsApp Desktop's current UI/search behavior, so pass the contact or group name exactly as it appears in WhatsApp. The first run may trigger macOS Automation permission prompts.
+By default, `send` is strict. If `--to` is a phone number, `wmsg` opens WhatsApp with a direct `whatsapp://send` URL for that number. If `--to` is a name, `wmsg` first requires exactly one non-system local chat with that exact display name from `wmsg chats`; direct contacts are then sent via their resolved phone number. This prevents loose search matches like `Mom` selecting `Sohini Mom`.
+
+Group chats and chats without a phone-backed WhatsApp identifier do not have a direct phone-number URL, so they currently require `--allow-loose-match`.
+
+`--allow-loose-match` restores the old behavior: WhatsApp search is opened, `--select-offset` down-arrow presses are sent, then Return is pressed. Use it only when you intentionally want UI search fallback for a target that is not in the local database. The first run may trigger macOS Automation permission prompts.
 
 Examples:
 

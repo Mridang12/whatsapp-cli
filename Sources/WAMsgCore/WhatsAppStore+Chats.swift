@@ -5,9 +5,7 @@ extension WhatsAppStore {
   public func listChats(limit: Int = 20, includeSystemChats: Bool = false) throws
     -> [WhatsAppChat]
   {
-    let pushNameJoin =
-      schema.hasPushNameTable
-      ? "LEFT JOIN ZWAPROFILEPUSHNAME pn ON pn.ZJID = c.ZCONTACTJID" : ""
+    let pushNameJoin = pushNameJoin()
     let pushNameColumn = schema.hasPushNameTable ? "NULLIF(pn.ZPUSHNAME, '')" : "NULL"
     let systemFilter = includeSystemChats ? "" : "AND NOT \(systemChatPredicate("c.ZCONTACTJID"))"
     let sql = """
@@ -39,9 +37,7 @@ extension WhatsAppStore {
   }
 
   public func chatInfo(chatID: Int64) throws -> WhatsAppChat? {
-    let pushNameJoin =
-      schema.hasPushNameTable
-      ? "LEFT JOIN ZWAPROFILEPUSHNAME pn ON pn.ZJID = c.ZCONTACTJID" : ""
+    let pushNameJoin = pushNameJoin()
     let pushNameColumn = schema.hasPushNameTable ? "NULLIF(pn.ZPUSHNAME, '')" : "NULL"
     let sql = """
       SELECT c.Z_PK AS chat_id,
@@ -81,6 +77,53 @@ extension WhatsAppStore {
     }
     guard let chatID else { return nil }
     return try chatInfo(chatID: chatID)
+  }
+
+  public func exactChats(matching target: String, includeSystemChats: Bool = false) throws
+    -> [WhatsAppChat]
+  {
+    let trimmed = target.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return [] }
+    let normalized = trimmed.lowercased()
+    let phoneDigits = Self.phoneDigits(from: trimmed)
+    let pushNameJoin = pushNameJoin()
+    let pushNameColumn = schema.hasPushNameTable ? "NULLIF(pn.ZPUSHNAME, '')" : "NULL"
+    let systemFilter = includeSystemChats ? "" : "AND NOT \(systemChatPredicate("c.ZCONTACTJID"))"
+    let sql = """
+      SELECT c.Z_PK AS chat_id,
+             IFNULL(c.ZCONTACTJID, '') AS identifier,
+             COALESCE(NULLIF(c.ZPARTNERNAME, ''), \(pushNameColumn), NULLIF(c.ZCONTACTJID, ''), '') AS name,
+             IFNULL(c.ZLASTMESSAGETEXT, '') AS last_message_text,
+             c.ZLASTMESSAGEDATE AS last_message_date,
+             IFNULL(c.ZUNREADCOUNT, 0) AS unread_count,
+             IFNULL(c.ZARCHIVED, 0) AS archived,
+             IFNULL(c.ZREMOVED, 0) AS removed,
+             c.ZSESSIONTYPE AS session_type,
+             CASE WHEN IFNULL(c.ZCONTACTJID, '') LIKE '%@g.us' THEN 1 ELSE 0 END AS is_group
+      FROM ZWACHATSESSION c
+      \(pushNameJoin)
+      WHERE IFNULL(c.ZREMOVED, 0) = 0
+        \(systemFilter)
+        AND (
+          lower(trim(IFNULL(c.ZPARTNERNAME, ''))) = ?
+          OR lower(trim(IFNULL(c.ZCONTACTJID, ''))) = ?
+          OR lower(trim(COALESCE(\(pushNameColumn), ''))) = ?
+          OR replace(replace(replace(replace(replace(replace(lower(IFNULL(c.ZCONTACTJID, '')), '@s.whatsapp.net', ''), '+', ''), ' ', ''), '-', ''), '(', ''), ')', '') = ?
+        )
+      GROUP BY c.Z_PK
+      ORDER BY c.ZLASTMESSAGEDATE DESC, c.Z_PK DESC
+      """
+    return try withConnection { db in
+      var chats: [WhatsAppChat] = []
+      let rows = try db.prepareRowIterator(
+        sql,
+        bindings: [normalized, normalized, normalized, phoneDigits]
+      )
+      while let row = try rows.failableNext() {
+        chats.append(try decodeChat(row))
+      }
+      return chats
+    }
   }
 
   public func participants(chatID: Int64) throws -> [String] {
@@ -127,6 +170,17 @@ extension WhatsAppStore {
     )
   }
 
+  private func pushNameJoin() -> String {
+    guard schema.hasPushNameTable else { return "" }
+    return """
+      LEFT JOIN (
+        SELECT ZJID, MIN(NULLIF(ZPUSHNAME, '')) AS ZPUSHNAME
+        FROM ZWAPROFILEPUSHNAME
+        GROUP BY ZJID
+      ) pn ON pn.ZJID = c.ZCONTACTJID
+      """
+  }
+
   private func systemChatPredicate(_ jidExpression: String) -> String {
     """
     (
@@ -135,5 +189,9 @@ extension WhatsAppStore {
       OR lower(IFNULL(\(jidExpression), '')) LIKE '%@broadcast'
     )
     """
+  }
+
+  public static func phoneDigits(from value: String) -> String {
+    value.filter { $0.isNumber }
   }
 }

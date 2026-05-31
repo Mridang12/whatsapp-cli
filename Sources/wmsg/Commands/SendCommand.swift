@@ -21,7 +21,7 @@ enum SendCommand {
           .make(
             label: "selectOffset",
             names: ["select-offset"],
-            help: "down-arrow presses before opening a search result"
+            help: "down-arrow presses before opening a loose search result"
           ),
         ],
         flags: [
@@ -30,6 +30,11 @@ enum SendCommand {
             label: "noRestoreClipboard",
             names: ["no-restore-clipboard"],
             help: "leave the sent text on the clipboard"
+          ),
+          .make(
+            label: "allowLooseMatch",
+            names: ["allow-loose-match"],
+            help: "allow unsafe WhatsApp search-result selection by offset"
           ),
         ]
       )
@@ -50,19 +55,28 @@ enum SendCommand {
   ) async throws {
     let recipient = try values.optionRequired("to")
     let text = try values.optionRequired("text")
-    let options = WhatsAppSendOptions(
+    let dbPath = values.option("db") ?? WhatsAppStore.defaultPath
+    let allowLooseMatch = values.flag("allowLooseMatch")
+    let store = allowLooseMatch ? nil : try storeFactory(dbPath)
+    let resolvedTarget = try resolveTarget(
       recipient: recipient,
+      allowLooseMatch: allowLooseMatch,
+      store: store
+    )
+    let options = WhatsAppSendOptions(
+      recipient: resolvedTarget.searchName,
       text: text,
+      phoneNumber: resolvedTarget.phoneNumber,
       searchDelay: values.optionDouble("searchDelay") ?? 1.5,
       selectOffset: values.optionInt("selectOffset") ?? 2,
-      restoreClipboard: !values.flag("noRestoreClipboard")
+      restoreClipboard: !values.flag("noRestoreClipboard"),
+      allowLooseMatch: allowLooseMatch
     )
     let sentAt = Date().addingTimeInterval(-2)
     try sendMessage(options)
 
     var sentMessage: WhatsAppMessage?
     if values.flag("verify") {
-      let dbPath = values.option("db") ?? WhatsAppStore.defaultPath
       let store = try storeFactory(dbPath)
       sentMessage = try await resolveSentMessage(
         store: store,
@@ -76,7 +90,7 @@ enum SendCommand {
       try StdoutWriter.writeJSONLine(
         SendPayload(
           ok: true,
-          recipient: recipient,
+          recipient: resolvedTarget.displayName,
           text: text,
           sentMessage: sentMessage.map { MessagePayload(message: $0) }
         )
@@ -85,10 +99,50 @@ enum SendCommand {
     }
 
     if let sentMessage {
-      StdoutWriter.writeLine("sent to \(recipient) row_id=\(sentMessage.rowID)")
+      StdoutWriter.writeLine("sent to \(resolvedTarget.displayName) row_id=\(sentMessage.rowID)")
     } else {
-      StdoutWriter.writeLine("sent to \(recipient)")
+      StdoutWriter.writeLine("sent to \(resolvedTarget.displayName)")
     }
+  }
+
+  private struct ResolvedTarget: Sendable, Equatable {
+    let displayName: String
+    let searchName: String
+    let phoneNumber: String?
+  }
+
+  private static func resolveTarget(
+    recipient: String,
+    allowLooseMatch: Bool,
+    store: WhatsAppStore?
+  ) throws -> ResolvedTarget {
+    let trimmed = recipient.trimmingCharacters(in: .whitespacesAndNewlines)
+    let phoneDigits = WhatsAppStore.phoneDigits(from: trimmed)
+    if !phoneDigits.isEmpty, phoneDigits.count >= 7 {
+      return ResolvedTarget(displayName: trimmed, searchName: trimmed, phoneNumber: phoneDigits)
+    }
+    guard !allowLooseMatch else {
+      return ResolvedTarget(displayName: trimmed, searchName: trimmed, phoneNumber: nil)
+    }
+    guard let store else {
+      throw WAMsgError.noExactChatMatch(trimmed)
+    }
+    let matches = try store.exactChats(matching: trimmed)
+    guard !matches.isEmpty else {
+      throw WAMsgError.noExactChatMatch(trimmed)
+    }
+    guard matches.count == 1, let chat = matches.first else {
+      throw WAMsgError.ambiguousChatMatch(trimmed, matches.count)
+    }
+    let phoneNumber = chat.isGroup ? "" : WhatsAppStore.phoneDigits(from: chat.identifier)
+    guard !phoneNumber.isEmpty else {
+      throw WAMsgError.strictSendRequiresPhoneNumber(chat.name)
+    }
+    return ResolvedTarget(
+      displayName: chat.name,
+      searchName: chat.name,
+      phoneNumber: phoneNumber.isEmpty ? nil : phoneNumber
+    )
   }
 
   private static func resolveSentMessage(
