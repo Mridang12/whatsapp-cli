@@ -47,7 +47,7 @@ enum WatchCommand {
         try StdoutWriter.writeJSONLine(MessagePayload(message: message))
       } else {
         let direction = message.isFromMe ? "sent" : "recv"
-        let timestamp = CLIISO8601.format(message.date)
+        let timestamp = CLIISO8601.formatLocal(message.date)
         let sender = message.senderName ?? message.sender
         StdoutWriter.writeLine("\(timestamp) [\(direction)] \(sender): \(message.text)")
       }

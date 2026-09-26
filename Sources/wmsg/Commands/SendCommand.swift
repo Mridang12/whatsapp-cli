@@ -117,8 +117,7 @@ enum SendCommand {
     store: WhatsAppStore?
   ) throws -> ResolvedTarget {
     let trimmed = recipient.trimmingCharacters(in: .whitespacesAndNewlines)
-    let phoneDigits = WhatsAppStore.phoneDigits(from: trimmed)
-    if !phoneDigits.isEmpty, phoneDigits.count >= 7 {
+    if let phoneDigits = WhatsAppStore.phoneNumber(fromIdentifier: trimmed), phoneDigits.count >= 7 {
       return ResolvedTarget(displayName: trimmed, searchName: trimmed, phoneNumber: phoneDigits)
     }
     guard !allowLooseMatch else {
@@ -134,7 +133,7 @@ enum SendCommand {
     guard matches.count == 1, let chat = matches.first else {
       throw WAMsgError.ambiguousChatMatch(trimmed, matches.count)
     }
-    let phoneNumber = chat.isGroup ? "" : WhatsAppStore.phoneDigits(from: chat.identifier)
+    let phoneNumber = chat.isGroup ? "" : WhatsAppStore.phoneNumber(fromIdentifier: chat.identifier) ?? ""
     guard !phoneNumber.isEmpty else {
       throw WAMsgError.strictSendRequiresPhoneNumber(chat.name)
     }
