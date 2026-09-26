@@ -12,7 +12,7 @@ extension WhatsAppStore {
       SELECT c.Z_PK AS chat_id,
              IFNULL(c.ZCONTACTJID, '') AS identifier,
              COALESCE(NULLIF(c.ZPARTNERNAME, ''), \(pushNameColumn), NULLIF(c.ZCONTACTJID, ''), '') AS name,
-             IFNULL(c.ZLASTMESSAGETEXT, '') AS last_message_text,
+             \(lastMessageTextExpression()) AS last_message_text,
              c.ZLASTMESSAGEDATE AS last_message_date,
              IFNULL(c.ZUNREADCOUNT, 0) AS unread_count,
              IFNULL(c.ZARCHIVED, 0) AS archived,
@@ -21,6 +21,7 @@ extension WhatsAppStore {
              CASE WHEN IFNULL(c.ZCONTACTJID, '') LIKE '%@g.us' THEN 1 ELSE 0 END AS is_group
       FROM ZWACHATSESSION c
       \(pushNameJoin)
+      \(lastMessageJoin())
       WHERE IFNULL(c.ZREMOVED, 0) = 0
         \(systemFilter)
       ORDER BY c.ZLASTMESSAGEDATE DESC, c.Z_PK DESC
@@ -43,7 +44,7 @@ extension WhatsAppStore {
       SELECT c.Z_PK AS chat_id,
              IFNULL(c.ZCONTACTJID, '') AS identifier,
              COALESCE(NULLIF(c.ZPARTNERNAME, ''), \(pushNameColumn), NULLIF(c.ZCONTACTJID, ''), '') AS name,
-             IFNULL(c.ZLASTMESSAGETEXT, '') AS last_message_text,
+             \(lastMessageTextExpression()) AS last_message_text,
              c.ZLASTMESSAGEDATE AS last_message_date,
              IFNULL(c.ZUNREADCOUNT, 0) AS unread_count,
              IFNULL(c.ZARCHIVED, 0) AS archived,
@@ -52,6 +53,7 @@ extension WhatsAppStore {
              CASE WHEN IFNULL(c.ZCONTACTJID, '') LIKE '%@g.us' THEN 1 ELSE 0 END AS is_group
       FROM ZWACHATSESSION c
       \(pushNameJoin)
+      \(lastMessageJoin())
       WHERE c.Z_PK = ?
       LIMIT 1
       """
@@ -93,7 +95,7 @@ extension WhatsAppStore {
       SELECT c.Z_PK AS chat_id,
              IFNULL(c.ZCONTACTJID, '') AS identifier,
              COALESCE(NULLIF(c.ZPARTNERNAME, ''), \(pushNameColumn), NULLIF(c.ZCONTACTJID, ''), '') AS name,
-             IFNULL(c.ZLASTMESSAGETEXT, '') AS last_message_text,
+             \(lastMessageTextExpression()) AS last_message_text,
              c.ZLASTMESSAGEDATE AS last_message_date,
              IFNULL(c.ZUNREADCOUNT, 0) AS unread_count,
              IFNULL(c.ZARCHIVED, 0) AS archived,
@@ -102,6 +104,7 @@ extension WhatsAppStore {
              CASE WHEN IFNULL(c.ZCONTACTJID, '') LIKE '%@g.us' THEN 1 ELSE 0 END AS is_group
       FROM ZWACHATSESSION c
       \(pushNameJoin)
+      \(lastMessageJoin())
       WHERE IFNULL(c.ZREMOVED, 0) = 0
         \(systemFilter)
         AND (
@@ -181,10 +184,25 @@ extension WhatsAppStore {
       """
   }
 
+  /// Newer WhatsApp builds store an encoded blob in `ZLASTMESSAGETEXT`, so prefer the text of
+  /// the chat's last message row when the schema links it.
+  private func lastMessageJoin() -> String {
+    guard schema.chatColumns.contains("zlastmessage") else { return "" }
+    return "LEFT JOIN ZWAMESSAGE lm ON lm.Z_PK = c.ZLASTMESSAGE"
+  }
+
+  private func lastMessageTextExpression() -> String {
+    guard schema.chatColumns.contains("zlastmessage") else {
+      return "IFNULL(c.ZLASTMESSAGETEXT, '')"
+    }
+    return "CASE WHEN lm.Z_PK IS NOT NULL THEN IFNULL(lm.ZTEXT, '') ELSE IFNULL(c.ZLASTMESSAGETEXT, '') END"
+  }
+
   private func systemChatPredicate(_ jidExpression: String) -> String {
     """
     (
       lower(IFNULL(\(jidExpression), '')) LIKE '%@status'
+      OR lower(IFNULL(\(jidExpression), '')) LIKE '%.status'
       OR lower(IFNULL(\(jidExpression), '')) = 'status@broadcast'
       OR lower(IFNULL(\(jidExpression), '')) LIKE '%@broadcast'
     )
@@ -193,5 +211,16 @@ extension WhatsAppStore {
 
   public static func phoneDigits(from value: String) -> String {
     value.filter { $0.isNumber }
+  }
+
+  /// Returns the phone number digits for a phone-backed identifier. WhatsApp `@lid`, group, and
+  /// broadcast identifiers are opaque ids, not phone numbers, so they return `nil`.
+  public static func phoneNumber(fromIdentifier value: String) -> String? {
+    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    if let at = trimmed.firstIndex(of: "@"), trimmed[at...] != "@s.whatsapp.net" {
+      return nil
+    }
+    let digits = phoneDigits(from: trimmed)
+    return digits.isEmpty ? nil : digits
   }
 }

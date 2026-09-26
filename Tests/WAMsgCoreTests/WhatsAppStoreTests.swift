@@ -8,10 +8,10 @@ func listChatsOrdersByRecentActiveSessions() throws {
   let store = try makeFixtureStore()
   let chats = try store.listChats(limit: 10)
 
-  #expect(chats.map(\.id) == [2, 1])
-  #expect(chats[0].name == "Team Chat")
-  #expect(chats[0].isGroup)
-  #expect(chats[1].unreadCount == 2)
+  #expect(chats.map(\.id) == [7, 2, 1])
+  #expect(chats[1].name == "Team Chat")
+  #expect(chats[1].isGroup)
+  #expect(chats[2].unreadCount == 2)
 }
 
 @Test
@@ -19,7 +19,7 @@ func listChatsCanIncludeSystemSessions() throws {
   let store = try makeFixtureStore()
   let chats = try store.listChats(limit: 10, includeSystemChats: true)
 
-  #expect(chats.map(\.id) == [5, 4, 2, 1])
+  #expect(chats.map(\.id) == [7, 6, 5, 4, 2, 1])
 }
 
 @Test
@@ -41,7 +41,7 @@ func messagesDecodeDirectionSendersAndAttachments() throws {
   #expect(messages[0].isFromMe)
   #expect(messages[0].sender == "me")
   #expect(messages[1].sender == "+15550001111@s.whatsapp.net")
-  #expect(messages[1].senderName == "Ada")
+  #expect(messages[1].senderName == "Ada Lovelace")
   #expect(messages[1].attachmentsCount == 1)
 
   let attachments = try store.attachments(for: 1)
@@ -70,7 +70,84 @@ func messagesAfterReturnsRowsInAscendingOrder() throws {
   let store = try makeFixtureStore()
   let messages = try store.messagesAfter(afterRowID: 1, chatID: nil, limit: 10)
 
-  #expect(messages.map(\.rowID) == [2, 3])
+  #expect(messages.map(\.rowID) == [2, 3, 10, 11, 12, 13, 14])
+}
+
+@Test
+func messagesFollowWhatsAppSortOrderNotRowIDOrDate() throws {
+  let store = try makeFixtureStore()
+
+  let newest = try store.messages(chatID: 7, limit: 10)
+  #expect(newest.map(\.text) == ["fifth", "fourth", "third", "second", "first"])
+
+  let oldest = try store.messages(chatID: 7, limit: 10, filter: nil, order: .oldestFirst)
+  #expect(oldest.map(\.text) == ["first", "second", "third", "fourth", "fifth"])
+}
+
+@Test
+func messagesPageWithBeforeAndAfterCursors() throws {
+  let store = try makeFixtureStore()
+
+  let latestTwo = try store.messages(chatID: 7, limit: 2)
+  #expect(latestTwo.map(\.text) == ["fifth", "fourth"])
+
+  let olderPage = try store.messages(
+    chatID: 7, limit: 2, filter: nil, beforeRowID: latestTwo.last?.rowID
+  )
+  #expect(olderPage.map(\.text) == ["third", "second"])
+
+  let lastPage = try store.messages(
+    chatID: 7, limit: 2, filter: nil, beforeRowID: olderPage.last?.rowID
+  )
+  #expect(lastPage.map(\.text) == ["first"])
+
+  let forward = try store.messages(
+    chatID: 7, limit: 2, filter: nil, order: .oldestFirst, afterRowID: 14
+  )
+  #expect(forward.map(\.text) == ["third", "fourth"])
+
+  #expect(throws: WAMsgError.messageNotFound(rowID: 1, chatID: 7)) {
+    _ = try store.messages(chatID: 7, limit: 2, filter: nil, beforeRowID: 1)
+  }
+}
+
+@Test
+func groupMessagesUseMemberSenderAndIgnoreEncodedPushNames() throws {
+  let store = try makeFixtureStore()
+  let messages = try store.messages(chatID: 2, limit: 10)
+
+  #expect(messages.count == 1)
+  #expect(messages[0].sender == "+15550002222@s.whatsapp.net")
+  #expect(messages[0].senderName == "Ben Bitdiddle")
+  #expect(messages[0].attachmentsCount == 0)
+  #expect(try store.attachments(for: 3).isEmpty)
+
+  let filtered = try store.messages(
+    chatID: 2,
+    limit: 10,
+    filter: WhatsAppMessageFilter(participants: ["+15550002222@s.whatsapp.net"])
+  )
+  #expect(filtered.map(\.rowID) == [3])
+
+  let lidMessages = try store.messages(chatID: 7, limit: 1, filter: nil, order: .oldestFirst)
+  #expect(lidMessages[0].senderName == "Lid Friend")
+}
+
+@Test
+func chatsUseLastMessageRowTextInsteadOfEncodedSnapshot() throws {
+  let store = try makeFixtureStore()
+  let chat = try store.chatInfo(chatID: 2)
+
+  #expect(chat?.lastMessageText == "group hello")
+}
+
+@Test
+func lidIdentifiersAreNotPhoneNumbers() {
+  #expect(WhatsAppStore.phoneNumber(fromIdentifier: "27771426349309@lid") == nil)
+  #expect(WhatsAppStore.phoneNumber(fromIdentifier: "12345@g.us") == nil)
+  #expect(WhatsAppStore.phoneNumber(fromIdentifier: "+15550001111@s.whatsapp.net") == "15550001111")
+  #expect(WhatsAppStore.phoneNumber(fromIdentifier: "+1 (555) 000-1111") == "15550001111")
+  #expect(WhatsAppStore.phoneNumber(fromIdentifier: "Jane Doe") == nil)
 }
 
 @Test

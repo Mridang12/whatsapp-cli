@@ -10,6 +10,7 @@ public enum WAMsgError: Error, CustomStringConvertible, Equatable {
   case ambiguousChatMatch(String, Int)
   case strictSendRequiresPhoneNumber(String)
   case appleScriptFailure(String)
+  case messageNotFound(rowID: Int64, chatID: Int64)
 
   public var description: String {
     switch self {
@@ -35,6 +36,8 @@ public enum WAMsgError: Error, CustomStringConvertible, Equatable {
         "Strict WhatsApp sends require a phone-number-backed direct chat for '\(target)'. Group chats and identifier-only chats require --allow-loose-match."
     case .appleScriptFailure(let message):
       return "AppleScript failed: \(message)"
+    case .messageNotFound(let rowID, let chatID):
+      return "No WhatsApp message with rowID \(rowID) in chat \(chatID)"
     }
   }
 }

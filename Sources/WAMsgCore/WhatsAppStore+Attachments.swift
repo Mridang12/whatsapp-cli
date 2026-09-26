@@ -15,7 +15,8 @@ extension WhatsAppStore {
              IFNULL(mi.ZMEDIAURL, '') AS media_url
       FROM ZWAMEDIAITEM mi
       LEFT JOIN ZWAMESSAGE m ON m.Z_PK = ?
-      WHERE mi.ZMESSAGE = ? OR (m.ZMEDIAITEM IS NOT NULL AND mi.Z_PK = m.ZMEDIAITEM)
+      WHERE (mi.ZMESSAGE = ? OR (m.ZMEDIAITEM IS NOT NULL AND mi.Z_PK = m.ZMEDIAITEM))
+        AND \(mediaItemHasContentPredicate(alias: "mi"))
       ORDER BY mi.Z_PK ASC
       """
     return try withConnection { db in

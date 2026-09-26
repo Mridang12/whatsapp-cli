@@ -48,7 +48,7 @@ enum ChatsCommand {
     }
 
     for chat in chats {
-      let last = CLIISO8601.format(chat.lastMessageAt)
+      let last = CLIISO8601.formatLocal(chat.lastMessageAt)
       let group = chat.isGroup ? " group" : ""
       let unread = chat.unreadCount > 0 ? " unread=\(chat.unreadCount)" : ""
       StdoutWriter.writeLine(

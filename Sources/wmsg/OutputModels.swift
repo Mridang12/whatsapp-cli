@@ -6,6 +6,7 @@ struct ChatPayload: Encodable, Equatable {
   let identifier: String
   let name: String
   let lastMessageAt: String
+  let lastMessageAtLocal: String
   let lastMessageText: String
   let unreadCount: Int
   let isArchived: Bool
@@ -19,6 +20,7 @@ struct ChatPayload: Encodable, Equatable {
     self.identifier = chat.identifier
     self.name = chat.name
     self.lastMessageAt = CLIISO8601.format(chat.lastMessageAt)
+    self.lastMessageAtLocal = CLIISO8601.formatLocal(chat.lastMessageAt)
     self.lastMessageText = chat.lastMessageText
     self.unreadCount = chat.unreadCount
     self.isArchived = chat.isArchived
@@ -36,6 +38,7 @@ struct MessagePayload: Encodable, Equatable {
   let senderName: String?
   let text: String
   let date: String
+  let localDate: String
   let isFromMe: Bool
   let stanzaID: String
   let fromJID: String?
@@ -53,6 +56,7 @@ struct MessagePayload: Encodable, Equatable {
     self.senderName = message.senderName
     self.text = message.text
     self.date = CLIISO8601.format(message.date)
+    self.localDate = CLIISO8601.formatLocal(message.date)
     self.isFromMe = message.isFromMe
     self.stanzaID = message.stanzaID
     self.fromJID = message.fromJID

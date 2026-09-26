@@ -45,6 +45,24 @@ extension WhatsAppStore {
     return error
   }
 
+  /// Newer WhatsApp builds create a `ZWAMEDIAITEM` row (holding only `ZMETADATA`) for plain
+  /// text messages, so a media item only counts as an attachment when it carries real content.
+  func mediaItemHasContentPredicate(alias: String) -> String {
+    let textColumns = [
+      "zmedialocalpath", "zmediaurl", "zthumbnaillocalpath", "ztitle", "zvcardname",
+      "zvcardstring",
+    ]
+    let numericColumns = ["zfilesize", "zlatitude", "zlongitude"]
+    var terms = textColumns.filter { schema.mediaColumns.contains($0) }.map {
+      "IFNULL(\(alias).\($0.uppercased()), '') != ''"
+    }
+    terms += numericColumns.filter { schema.mediaColumns.contains($0) }.map {
+      "IFNULL(\(alias).\($0.uppercased()), 0) != 0"
+    }
+    guard !terms.isEmpty else { return "1" }
+    return "(" + terms.joined(separator: " OR ") + ")"
+  }
+
   public static func whatsappEpoch(_ date: Date) -> Double {
     date.timeIntervalSince1970 - appleEpochOffset
   }

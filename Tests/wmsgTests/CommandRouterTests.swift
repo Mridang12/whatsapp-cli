@@ -1,4 +1,6 @@
+import Foundation
 import Testing
+import WAMsgCore
 @testable import wmsg
 
 @Test
@@ -39,6 +41,31 @@ func parserResolvesSendLooseMatchFlag() throws {
   #expect(spec.name == "send")
   #expect(values.option("to") == "Mom")
   #expect(values.flag("allowLooseMatch"))
+}
+
+@Test
+func parserResolvesHistoryPagingOptions() throws {
+  let router = CommandRouter()
+  let (spec, values) = try router.resolve(
+    argv: ["wmsg", "history", "--chat-id", "7", "--order", "oldest", "--after-id", "12", "--before-id", "40"]
+  )
+
+  #expect(spec.name == "history")
+  #expect(try HistoryCommand.parseOrder(values.option("order")) == .oldestFirst)
+  #expect(try HistoryCommand.parseOrder(nil) == .newestFirst)
+  #expect(values.optionInt64("afterID") == 12)
+  #expect(values.optionInt64("beforeID") == 40)
+  #expect(throws: ParsedValuesError.invalidOption("order")) {
+    _ = try HistoryCommand.parseOrder("sideways")
+  }
+}
+
+@Test
+func localTimestampsIncludeOffset() throws {
+  let date = Date(timeIntervalSince1970: 1_790_000_000)
+  let losAngeles = try #require(TimeZone(identifier: "America/Los_Angeles"))
+  #expect(CLIISO8601.format(date) == "2026-09-21T14:13:20.000Z")
+  #expect(CLIISO8601.formatLocal(date, timeZone: losAngeles) == "2026-09-21T07:13:20.000-07:00")
 }
 
 @Test

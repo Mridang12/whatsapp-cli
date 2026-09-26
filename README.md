@@ -76,7 +76,7 @@ wmsg chats [--limit <count>] [--include-system] [--db <path>] [--json]
 | `--limit <count>` | Number of chats to list. | `20` |
 | `--include-system` | Include WhatsApp status/broadcast pseudo-sessions. | off |
 
-By default, `chats` hides WhatsApp status/broadcast pseudo-sessions so contacts do not appear twice because of recent status updates. Text output includes the chat row id, display name, WhatsApp identifier, last-message timestamp, group marker, and unread count when nonzero. JSON output includes `id`, `identifier`, `name`, `lastMessageAt`, `lastMessageText`, `unreadCount`, `isArchived`, `isRemoved`, `isGroup`, `sessionType`, and `participants`.
+By default, `chats` hides WhatsApp status/broadcast pseudo-sessions (`@status`, `@lid.status`, and `@broadcast` identifiers) so contacts do not appear twice because of recent status updates. Text output includes the chat row id, display name, WhatsApp identifier, last-message timestamp in local time, group marker, and unread count when nonzero. JSON output includes `id`, `identifier`, `name`, `lastMessageAt` (UTC), `lastMessageAtLocal` (local time with UTC offset), `lastMessageText`, `unreadCount`, `isArchived`, `isRemoved`, `isGroup`, `sessionType`, and `participants`.
 
 Examples:
 
@@ -91,7 +91,7 @@ wmsg chats --limit 5 --include-system
 Show recent messages for a chat. Use `wmsg chats` first to find the chat row id.
 
 ```bash
-wmsg history --chat-id <rowid> [--limit <count>] [--participants <jid[,jid...]>] [--start <iso8601>] [--end <iso8601>] [--attachments] [--db <path>] [--json]
+wmsg history --chat-id <rowid> [--limit <count>] [--participants <jid[,jid...]>] [--start <iso8601>] [--end <iso8601>] [--order newest|oldest] [--before-id <rowid>] [--after-id <rowid>] [--attachments] [--db <path>] [--json]
 ```
 
 | Option | Description | Default |
@@ -101,9 +101,16 @@ wmsg history --chat-id <rowid> [--limit <count>] [--participants <jid[,jid...]>]
 | `--participants <jid[,jid...]>` | Filter by comma-separated sender JIDs, such as `me,+15551234567@s.whatsapp.net`. | none |
 | `--start <iso8601>` | Inclusive ISO8601 start time. | none |
 | `--end <iso8601>` | Exclusive ISO8601 end time. | none |
+| `--order newest\|oldest` | `newest` selects the newest matching messages and prints them newest first. `oldest` selects the oldest matching messages and prints them oldest first. | `newest` |
+| `--before-id <rowid>` | Only messages that come before this message in the conversation. Use it to page backward. | none |
+| `--after-id <rowid>` | Only messages that come after this message in the conversation. Use it to page forward. | none |
 | `--attachments` | Include attachment metadata. Without it, text output only shows an attachment count. | off |
 
-Messages are returned newest first. JSON output includes `rowID`, `chatID`, `sender`, `senderName`, `text`, `date`, `isFromMe`, `stanzaID`, `fromJID`, `toJID`, `messageType`, `messageStatus`, `errorStatus`, `attachmentsCount`, and optional `attachments`.
+Messages are ordered the way WhatsApp shows them (the `ZSORT` conversation order), not by `rowID`. Row ids reflect when WhatsApp Desktop inserted a message and are not chronological, especially for messages that synced late from your phone.
+
+`--limit` caps the number of messages returned. When more messages match, text output ends with a hint such as `(more older messages available: --before-id 1234)`. To read a whole range, repeat the command with `--before-id` (default order) or `--after-id` (`--order oldest`) set to the last row id you received until the hint disappears or fewer than `--limit` messages come back.
+
+JSON output includes `rowID`, `chatID`, `sender`, `senderName`, `text`, `date` (UTC), `localDate` (local time with UTC offset), `isFromMe`, `stanzaID`, `fromJID`, `toJID`, `messageType`, `messageStatus`, `errorStatus`, `attachmentsCount`, and optional `attachments`. For group messages, `sender` is the member who wrote the message, not the group identifier. Text output prints local timestamps.
 
 Examples:
 
@@ -111,6 +118,8 @@ Examples:
 wmsg history --chat-id 1 --limit 20
 wmsg history --chat-id 1 --start 2026-01-01T00:00:00Z --end 2026-02-01T00:00:00Z
 wmsg history --chat-id 1 --participants me --attachments --json
+wmsg history --chat-id 1 --limit 50 --before-id 1234
+wmsg history --chat-id 1 --start 2026-01-01T00:00:00-08:00 --order oldest --limit 50
 ```
 
 ## `wmsg watch`
@@ -193,3 +202,5 @@ wmsg status --json
 - Reading requires Full Disk Access for the terminal because WhatsApp stores its database in a protected macOS container.
 - Sending requires Automation permission for WhatsApp.app and System Events.
 - `wmsg` does not modify the WhatsApp database directly; reads are read-only and sends go through WhatsApp.app.
+- `wmsg` only sees what WhatsApp Desktop has synced to this Mac. If WhatsApp Desktop was closed or the Mac was asleep, messages from your phone show up later with their original timestamps.
+- `@lid` identifiers are opaque WhatsApp ids, not phone numbers. Strict sends to those chats require `--allow-loose-match`.
